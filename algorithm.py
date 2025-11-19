@@ -115,23 +115,17 @@ class Sample(object):
 
                 Output: ['ROOT', 'Distribution', 'license', 'does', 'ROOT_UPOS', 'NOUN', 'NOUN', 'AUX']
         """
-        # --- Constants for special tokens ---
+        # Constants for special tokens 
         PAD = '<PAD>'
         ROOT_WORD = 'ROOT'
         ROOT_UPOS = 'ROOT_UPOS'
         
-        # --- Helper function to retrieve features, handling None/ROOT tokens ---
         def get_token_feature(token, is_upos):
             if token is None:
-                # If the token is None, it means the stack or buffer ran out of elements, 
-                # so we use the padding token.
                 return PAD
             elif token.id == 0:
-                # The ROOT token (ID 0) has a special representation for both the word form 
-                # and the UPOS tag to distinguish it from regular words.
                 return ROOT_UPOS if is_upos else ROOT_WORD
             else:
-                # For regular tokens, return the word form or the Universal POS tag.
                 return token.upos if is_upos else token.form
 
         # 1. --- Extract features from the Stack (σ) ---
@@ -196,7 +190,6 @@ class Sample(object):
         # C. Concatenate and return the final list
         # Format: [Words_Stack, Words_Buffer, UPOS_Stack, UPOS_Buffer] 
         return words_feats + upos_feats
-        raise NotImplementedError
     
 
     def __str__(self):
@@ -527,7 +520,7 @@ class ArcEager():
    
 
 
-'''if __name__ == "__main__":
+if __name__ == "__main__":
 
 
     print("**************************************************")
@@ -605,13 +598,61 @@ class ArcEager():
     # To display the created Sample instance
     print("Sample:\n", sample_instance)
 
+
+    print("\n")
+    print("**************************************************")
+    print("* TESTING FEATURE EXTRACTION (state_to_feats) *")
+    print("**************************************************")
+
+    # --- Preparar Tokens Falsos para la prueba ---
+    # Definimos tokens simples para simular el Ejemplo 1 y 2 de la documentación
+    t_root = Token(0, "ROOT", "ROOT", "ROOT", "_", "_", -1, "_")
+    t_dist = Token(1, "Distribution", "distribution", "NOUN", "_", "_", 2, "nsubj")
+    t_of   = Token(2, "of", "of", "ADP", "_", "_", 1, "case") # Inventado para llenar buffer
+    t_lic  = Token(4, "license", "license", "NOUN", "_", "_", 3, "nsubj")
+    t_does = Token(5, "does", "do", "AUX", "_", "_", 0, "root")
+
+    # --- CASO 1: Stack pequeño (Necesita Padding) ---
+    # Estado: Stack=[ROOT], Buffer=[Distribution, of]
+    print("\n>>> Test Case 1: Stack has only 1 element (ROOT). Padding needed.")
+    
+    state_1 = State([t_root], [t_dist, t_of], set())
+    sample_1 = Sample(state_1, Transition(ArcEager.SHIFT)) # La transición no importa aquí
+    
+    # Llamamos a la función
+    features_1 = sample_1.state_to_feats(nbuffer_feats=2, nstack_feats=2)
+    
+    print(f"State Stack: {[t.form for t in state_1.S]}")
+    print(f"State Buffer: {[t.form for t in state_1.B]}")
+    print(f"Generated Features: {features_1}")
+
+    # Verificación visual
+    expected_1 = ['<PAD>', 'ROOT', 'Distribution', 'of', '<PAD>', 'ROOT_UPOS', 'NOUN', 'ADP']
+    print(f"Match Expected? {features_1 == expected_1}")
+
+
+    # --- CASO 2: Stack lleno (Sin Padding) ---
+    # Estado: Stack=[ROOT, Distribution], Buffer=[license, does]
+    print("\n>>> Test Case 2: Stack has 2 elements. No padding needed.")
+    
+    state_2 = State([t_root, t_dist], [t_lic, t_does], set())
+    sample_2 = Sample(state_2, Transition(ArcEager.LA)) 
+
+    # Llamamos a la función
+    features_2 = sample_2.state_to_feats(nbuffer_feats=2, nstack_feats=2)
+    
+    print(f"State Stack: {[t.form for t in state_2.S]}")
+    print(f"State Buffer: {[t.form for t in state_2.B]}")
+    print(f"Generated Features: {features_2}")
+
+    # Verificación visual
+    expected_2 = ['ROOT', 'Distribution', 'license', 'does', 'ROOT_UPOS', 'NOUN', 'NOUN', 'AUX']
+    print(f"Match Expected? {features_2 == expected_2}")
+
 '''
 
 if __name__ == "__main__":
     
-    # Definición del árbol de dependencias para "John ate a green apple" (Gold Standard)
-    # Esta estructura (Standard UD, donde a y green modifican a apple) es la que debe reproducir el oráculo.
-    # Indices: (0:ROOT, 1:John, 2:ate, 3:a, 4:green, 5:apple)
     tree_john = [
         Token(0, "ROOT", "ROOT", "ROOT", "_", "_", -1, "_"),
         Token(1, "John", "John", "PROPN", "_", "_", 2, "nsubj"),   # Head: ate (2)
@@ -621,32 +662,26 @@ if __name__ == "__main__":
         Token(5, "apple", "apple", "NOUN", "_", "_", 2, "obj")    # Head: ate (2)
     ]
 
-    # --- PRUEBAS DE INICIALIZACIÓN Y TRANSICIÓN BÁSICA ---
     print("**************************************************")
     print("* Arc-eager function (Test: John ate a green apple) *")
     print("**************************************************\n")
 
     arc_eager = ArcEager()
     
-    # 1. Initial State Creation
     print("1. Initial state for: 'John ate a green apple'")
     state = arc_eager.create_initial_state(tree_john)
     print(state)
 
-    # 2. Final State Check
     print (f"\nIs the initial state a valid final state (buffer is empty)? {arc_eager.final_state(state)}\n")
 
-    # 3. Manual SHIFT test (Moves 'John' to stack)
     transition_shift = Transition(arc_eager.SHIFT)
     arc_eager.apply_transition(state, transition_shift)
     print("State after applying ONE SHIFT transition:")
     print(state, "\n")
 
-    # 4. Gold Arcs Extraction
     gold_arcs = arc_eager.gold_arcs(tree_john)
     print (f"Set of gold arcs: {gold_arcs}\n\n")
 
-    # 5. Transition and Sample tests (Minimal check)
     print("**************************************************")
     print("* Creating instances of the class Transition/Sample *")
     print("**************************************************")
@@ -656,19 +691,16 @@ if __name__ == "__main__":
     print("Sample instance created.")
 
 
-    # --- PRUEBA DEL ORÁCULO (LA LÓGICA COMPLETA) ---
     print("\n" + "="*60)
     print("* ORACLE TEST: John ate a green apple           *")
     print("="*60)
     
     try:
-        # Ejecutamos el oráculo sobre la frase inicial (usa una copia interna del árbol)
         samples = arc_eager.oracle(tree_john)
         
         print(f"\nSUCCESS! The oracle generated {len(samples)} training samples.")
         print("\nGenerated sequence of transitions:")
         
-        # Iteramos sobre las muestras para mostrar la secuencia de acciones y estados
         for i, s in enumerate(samples):
             stack_str = "[" + ", ".join([t.form for t in s.state.S]) + "]"
             buffer_str = "[" + ", ".join([t.form for t in s.state.B]) + "]"
@@ -681,6 +713,5 @@ if __name__ == "__main__":
         print(f"Error message: {e}")
         print("Hint: Check your is_correct() functions logic.")
     except Exception as e:
-        # Esto captura errores como IndexError o NotImplementedError
         print(f"\nCRASHED: Your code has an unexpected error.")
-        print(f"Error: {type(e).__name__}: {e}")
+        print(f"Error: {type(e).__name__}: {e}") '''
